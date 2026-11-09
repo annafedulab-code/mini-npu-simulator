@@ -87,6 +87,33 @@ def mac(pattern, filter_matrix):
     return total
 
 
+# ------------------------------------------------------------
+# (보너스) 최적화: 2차원 표를 1차원 배열(길이 N^2)로 펴서 계산
+# ------------------------------------------------------------
+def flatten(matrix):
+    """
+    n x n 표를 한 줄(길이 n*n)로 편다.
+    (row, col) 자리의 값은 1차원 배열의 row * n + col 번째에 들어간다.
+    """
+    flat = []
+    for row in matrix:
+        for value in row:
+            flat.append(value)
+    return flat
+
+
+def mac_flat(pattern_flat, filter_flat):
+    """
+    1차원 배열끼리 MAC 연산을 한다.
+    2차원처럼 '줄을 찾고 -> 칸을 찾는' 두 번의 접근 대신
+    번호 하나로 바로 접근하므로 접근 과정이 단순해진다.
+    """
+    total = 0.0
+    for i in range(len(pattern_flat)):
+        total += pattern_flat[i] * filter_flat[i]
+    return total
+
+
 # ============================================================
 # 4. 점수 비교 정책: 허용오차(epsilon) 기반
 # ============================================================
@@ -103,11 +130,14 @@ def judge(score_a, score_b, label_a, label_b):
 # ============================================================
 # 5. 성능 측정: MAC 연산만 REPEAT_COUNT번 반복해서 평균 시간(ms)을 잰다
 # ============================================================
-def measure_mac_time(pattern, filter_matrix, repeat=REPEAT_COUNT):
-    """입출력 시간은 빼고, MAC 함수 호출 구간만 측정한다."""
+def measure_mac_time(pattern, filter_matrix, repeat=REPEAT_COUNT, mac_func=mac):
+    """
+    입출력 시간은 빼고, MAC 함수 호출 구간만 측정한다.
+    mac_func로 2차원용(mac) 또는 1차원용(mac_flat)을 골라 같은 방식으로 잰다.
+    """
     start = time.perf_counter()
     for _ in range(repeat):
-        mac(pattern, filter_matrix)
+        mac_func(pattern, filter_matrix)
     end = time.perf_counter()
     return (end - start) * 1000 / repeat
 
@@ -135,15 +165,26 @@ def make_x(n):
 
 
 def print_performance_table(sizes):
-    """크기별 평균 연산 시간과 연산 횟수(N^2)를 표로 출력한다."""
-    print(f"{'크기':<10}{'평균 시간(ms)':>16}{'연산 횟수(N^2)':>18}")
-    print("-" * 46)
+    """
+    크기별 평균 연산 시간과 연산 횟수(N^2)를 표로 출력한다.
+    (보너스) 같은 입력, 같은 반복 횟수로 2차원(최적화 전)과
+    1차원(최적화 후) 방식을 함께 측정해 비교한다.
+    """
+    print(f"{'크기':<8}{'2차원(ms)':>12}{'1차원(ms)':>12}{'개선율':>10}{'연산 횟수(N^2)':>16}")
+    print("-" * 60)
     for n in sizes:
         pattern = make_cross(n)
         filter_matrix = make_x(n)
-        avg_ms = measure_mac_time(pattern, filter_matrix)
+        pattern_flat = flatten(pattern)       # 변환 시간은 측정에서 제외
+        filter_flat = flatten(filter_matrix)
+
+        before_ms = measure_mac_time(pattern, filter_matrix, mac_func=mac)
+        after_ms = measure_mac_time(pattern_flat, filter_flat, mac_func=mac_flat)
+        improve = (before_ms - after_ms) / before_ms * 100 if before_ms > 0 else 0.0
+
         size_text = f"{n}x{n}"
-        print(f"{size_text:<10}{avg_ms:>16.4f}{n * n:>18}")
+        print(f"{size_text:<8}{before_ms:>12.4f}{after_ms:>12.4f}{improve:>9.1f}%{n * n:>16}")
+    print("※ 개선율 = (2차원 - 1차원) / 2차원 x 100, 양수면 1차원이 더 빠름")
 
 
 def print_section(title):
